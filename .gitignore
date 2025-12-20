@@ -1,0 +1,12 @@
+__pycache__
+amd64/Lib/*
+!amd64/Lib/site-packages.zip.001
+!amd64/Lib/site-packages.zip.002
+!amd64/Lib/site-packages.zip.003
+!amd64/Lib/site-packages.zip.004
+other
+rubert-tiny2
+clear_cache.bat
+events.log
+gigakeys.ini
+gigakeys_.ini
