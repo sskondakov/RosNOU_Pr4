@@ -1,77 +1,68 @@
 import os
-import uuid
-import configparser
-import patoolib
-import time
 
+import uuid
+
+from tqdm import tqdm
+
+import configparser
+from zipfile import ZipFile
+
+# Пути к папке скрипта
 script_path = os.path.dirname(os.path.abspath(__file__))
 
-zip_base_path = os.path.join(script_path, 'amd64', 'Lib', 'site-packages.zip')
-extract_path = os.path.dirname(zip_base_path)
+###############################################################################
+# Установка сторонних пакетов
 
-def merge_multivolume_archive(base_path):
-    output_path = base_path
-    volume_num = 1
-    
-    first_volume = f'{base_path}.{volume_num:03d}'
-    if not os.path.exists(first_volume):
-        print(f'Первый том архива не найден: {first_volume}')
-        return None
-    
-    print('Объединение томов архива...')
-    with open(output_path, 'wb') as output_file:
-        while True:
-            volume_path = f'{base_path}.{volume_num:03d}'
-            if not os.path.exists(volume_path):
-                break
-            
-            print(f'Добавление тома {volume_num}: {volume_path}')
-            with open(volume_path, 'rb') as volume_file:
-                output_file.write(volume_file.read())
-            
-            volume_num += 1
-    
-    print(f'\nАрхив объединен: {output_path}')
-    return output_path
+# Путь к архиву сторонних пакетов и папке для распаковки
+zip_path = os.path.join(script_path, 'amd64', 'Lib', 'site-packages.zip')
+extract_path = os.path.dirname(zip_path)
 
-# Объединяем архив, если он многотомный
-if os.path.exists(f"{zip_base_path}.001"):
-    merged_archive = merge_multivolume_archive(zip_base_path)
-    
-    if merged_archive:
-        print('\nРаспаковка архива...')
-        patoolib.extract_archive(merged_archive, outdir=extract_path)
-        
-        time.sleep(5)
-        try
-            os.remove(merged_archive)
-        except
-            pass
-        
-        print('\nРаспаковка завершена.')
-        
-else:
-    if os.path.exists(zip_base_path):
-        print('\nРаспаковка архива...')
-        patoolib.extract_archive(zip_base_path, outdir=extract_path)
-        print('\nРаспаковка завершена.')
+# Сборка архива сторонних пакетов из частей (обходим ограничение GitHub)
+with open(zip_path, 'wb') as zip_file:
+    part = 1
+    while True:
+        part_path = f'{zip_path}.{part:03d}'
+        if not os.path.exists(part_path):
+            break
 
-    else:
-        print(f'\nАрхив не найден: {zip_base_path}')
+        with open(part_path, 'rb') as part_file:
+            zip_file.write(part_file.read())
 
+        os.remove(part_path)
+
+        part += 1
+
+# Распаковка сторонних пакетов
+with ZipFile(zip_path, 'r') as zip_file:
+    members = zip_file.namelist()
+    for member in tqdm(members, desc='Распаковка'):
+        zip_file.extract(member, extract_path)
+
+# Удаление архива
+os.remove(zip_path)
+
+###############################################################################
+# Создание файла настройки GigaChat
+
+# Путь к файлу настройки GigaChat
 config_path = os.path.join(script_path, 'gigakeys.ini')
 
+# Проверка наличия файла настройки
 if not os.path.exists(config_path):
+    # Создание настройки
     config = configparser.ConfigParser()
 
+    # Создание секции GIGACHAT
     config.add_section('GIGACHAT')
     config.set('GIGACHAT', 'authorization_key', '')
     config.set('GIGACHAT', 'session_id', str(uuid.uuid4()))
 
+    # Запись настройки в  файл
     with open(config_path, 'w', encoding='utf-8') as config_file:
-        config.write(config_file)
+            config.write(config_file)
 
+###############################################################################
 print('''\nПрограмма успешно установлена.
 
 Укажите ключ авторизации GigaChat в файле gigakeys.ini.'''
-)
+    )
