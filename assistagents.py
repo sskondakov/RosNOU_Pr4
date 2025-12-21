@@ -9,7 +9,7 @@ from gigachat.models.function_parameters import FunctionParameters
 
 from agents import AIAgentMessage, BaseAIFunctions, BaseAIAgent
 from funcdb import function_details
-from gigagents import BaseGigaChatAIAgent
+from gigagents import BaseGigaChatAIAgent, default_model_name
 from semsearch import RubertTiny2SemanticSearch
 from utilities import main_folder, config_value, main_logger
 
@@ -54,9 +54,7 @@ class AssistantAgent(BaseGigaChatAIAgent):
         self._logger = main_logger()
 
         # Получение имени модели LLM
-        model = config_value(None, 'GIGACHAT', 'model', None)
-        if model is None:
-            raise Exception("Не указан модель GigaChat")
+        model = default_model_name()
 
         # Системный prompt
         system_prompt = '''Ты специалист по поиску компьютерных программ.

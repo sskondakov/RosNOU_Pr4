@@ -2,13 +2,17 @@ import os
 
 import uuid
 
-from tqdm import tqdm
-
 import configparser
 from zipfile import ZipFile
 
+from funcdb import functions_db_path
+from utilities import set_main_folder
+
 # Пути к папке скрипта
 script_path = os.path.dirname(os.path.abspath(__file__))
+
+# Устанавливаем основную папку проекта
+set_main_folder(script_path)
 
 ###############################################################################
 # Установка сторонних пакетов
@@ -35,11 +39,18 @@ with open(zip_path, 'wb') as zip_file:
 # Распаковка сторонних пакетов
 with ZipFile(zip_path, 'r') as zip_file:
     members = zip_file.namelist()
-    for member in tqdm(members, desc='Распаковка'):
+    total = len(members)
+    for i, member in enumerate(members):
+        print(f'\rРаспаковка: {i + 1} из {total} ({100 * (i + 1) / total:.0f}%)', end='')
         zip_file.extract(member, extract_path)
 
 # Удаление архива
 os.remove(zip_path)
+
+###############################################################################
+# Создание файла базы данных функций
+db_path = functions_db_path()
+open(db_path, 'w').close()
 
 ###############################################################################
 # Создание файла настройки GigaChat

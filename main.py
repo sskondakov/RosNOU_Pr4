@@ -4,7 +4,7 @@ import threading
 
 from datetime import datetime
 import json
-import re
+from tqdm import tqdm
 
 import logging
 
@@ -15,9 +15,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 from agents import BaseAIAgentManager, AIAgentMessage
 from assistagents import AppListAgent, AssistantAgent, LaunchAppAgent
-from funcdb import save_prompt
+from gigagents import new_app_description
+from osinfo import os_app_list
+from semsearch import RubertTiny2SemanticSearch
+from funcdb import function_id_by_command, function_type_id, save_function, save_prompt
 from funceditor import FunctionEditorWindow
-from utilities import set_main_folder, main_folder, config_value, set_logging_level, main_logger
+from utilities import set_main_folder, main_folder, config_value, set_config_value, set_logging_level, main_logger
 
 # Путь к папкам скрипта
 script_path = os.path.dirname(os.path.abspath(__file__))
@@ -472,6 +475,14 @@ class SystemTray:
             )
         )
 
+    # Уведомление о запуске
+    def _show_startup_notification(self):
+        if self.icon.HAS_NOTIFICATION:
+            self.icon.notify(message='Ваш ассистент Windows находится здесь', title='OS Assistant')
+
+        else:
+            print('Ваш ассистент Windows находится в системном трее')
+
     # Отображение окна диалога
     def _show_window(self, icon=None, item=None):
         self.main_window.show_window()
@@ -482,7 +493,7 @@ class SystemTray:
             editor.show()
             
         except Exception as e:
-            print(f"Ошибка запуска редактора функций: {e}")
+            logger.error(f'Ошибка запуска редактора функций: {e}')
 
     # Выход из приложения   
     def _exit_app(self, icon=None, item=None):
@@ -495,26 +506,65 @@ class SystemTray:
     
     # Запуск иконки в трее
     def run(self):
-        self.icon.run()
+        self.icon.run_detached()
+        threading.Timer(3.0, self._show_startup_notification).start()
+
+# Первоначальная инициализация приложения
+def first_init_application():
+    if config_value(None, 'MAIN', 'first_run', 'True'):
+        set_config_value(None, 'MAIN', 'first_run', 'False')
+
+    else:
+        return
+
+    logger = main_logger()
+    
+    app_list = os_app_list()
+    launch_app_id = function_type_id('Launch application')
+    
+    for app_info in tqdm(app_list, desc='Заполнение базы функций операционной системы'):
+        try:
+            result = json.loads(new_app_description(app_info))
+            if result['description']:
+                save_function(
+                    function_id_by_command(app_info['command']),
+                    app_info['name'],
+                    launch_app_id,
+                    result['description'],
+                    app_info['command']
+                )
+
+        except Exception as e:
+            logger.error(f'Ошибка заполнения базы функций: {e}')
 
 # Главная функция
 def main():
     try:
-        # Создаем главное окно (но НЕ показываем)
+        # Первоначальная инициализация
+        first_init_application()
+
+        # Пересчет эмбеддингов
+        # TODO Не оптимально
+        searcher = RubertTiny2SemanticSearch()
+        searcher.rebuild_embeddings()
+
+        # Создаем и скрываем главное окно
         main_window = MainWindow()
-        main_window.root.withdraw()  # СКРЫВАЕМ сразу!
+        main_window.root.withdraw()
         
-        # Иконка в трее в ОТДЕЛЬНОМ потоке
+        # Иконка в трее - отдельный поток
         tray = SystemTray(main_window)
         tray_thread = threading.Thread(target=tray.run, daemon=True)
         tray_thread.start()
         
-        # Tkinter mainloop в ГЛАВНОМ потоке!
+        # Главный цикл - основной поток
         main_window.run()
         
     except Exception as e:
-        print(f"Ошибка запуска приложения: {e}")
+        print(f'Ошибка запуска приложения: {e}')
+
         return 1
+
     return 0
 
 # Код главного скрипта

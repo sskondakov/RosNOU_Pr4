@@ -9,7 +9,7 @@ import sqlite3
 from utilities import config_value, main_folder
 
 # Путь к базе данных функций
-def _functions_db_path() -> str:
+def functions_db_path() -> str:
     # Имя файла базы данных
     functions_db_name = config_value(None, 'FUNCTIONS_DB', 'db_name')
     if functions_db_name is None:
@@ -21,11 +21,19 @@ def _functions_db_path() -> str:
 # Соединение с базой данных функций
 def _functions_db_connection():
     # Путь к файлу базы данных
-    functions_db_path = _functions_db_path()
+    functions_db_path = functions_db_path()
     if not os.path.exists(functions_db_path):
         raise Exception("База данных функций не найдена")
 
     return sqlite3.connect(functions_db_path)
+
+# Курсор базы данных
+def _functions_db_cursor(connection):
+    cursor = connection.cursor()
+
+    _try_init_functions_db(cursor)
+
+    return cursor
 
 # Инициализация базы данных функций
 def _try_init_functions_db(cursor):
@@ -107,10 +115,7 @@ def _try_init_functions_db(cursor):
 def delete_function(function_id: int):
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
+            cursor = _functions_db_cursor(connection)
 
             # Удаляем связанные промпты
             cursor.execute('DELETE FROM prompts WHERE function_id = ?', (function_id,))
@@ -126,10 +131,7 @@ def delete_function(function_id: int):
 def delete_prompt(prompt_id: int):
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-            
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
+            cursor = _functions_db_cursor(connection)
             
             # Удаляем промпт
             cursor.execute('DELETE FROM prompts WHERE id = ?', (prompt_id,))
@@ -142,10 +144,7 @@ def delete_prompt(prompt_id: int):
 def delete_free_embeddings():
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
+            cursor = _functions_db_cursor(connection)
 
             # Ищем "свободные" эмбеддинги
             cursor.execute('''
@@ -181,6 +180,23 @@ def delete_free_embeddings():
     except Exception as e:
         raise Exception(f'Ошибка удаления "свободных" эмбеддингов: {e}')
 
+# id функции по команде запуска
+def function_id_by_command(command: str) -> int:
+    try:
+        with _functions_db_connection() as connection:
+            cursor = _functions_db_cursor(connection)
+
+            # Ищем id функции по команде
+            cursor.execute('SELECT id FROM functions WHERE command = ?', (command,))
+
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            return None
+            
+    except Exception as e:
+        raise Exception(f'Ошибка получения id функции по команде: {e}')
+
 # Список функций
 def functions_list(function_ids: list[int] = None) -> list[tuple[int, str, str, str, str]]:
     result = []
@@ -188,11 +204,8 @@ def functions_list(function_ids: list[int] = None) -> list[tuple[int, str, str, 
     try:
         # Соединение с базой данных и курсор
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
+            cursor = _functions_db_cursor(connection)
             
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
-
             # Получаем список функций
             if function_ids is None:
                 cursor.execute('''
@@ -230,11 +243,8 @@ def function_types():
 
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
+            cursor = _functions_db_cursor(connection)
             
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
-
             # Получаем типы функций
             cursor.execute('SELECT id, name FROM function_types ORDER BY name')
 
@@ -250,6 +260,15 @@ def function_types():
 
     return result
 
+# Тип функции по имени
+def function_type_id(name: str) -> int:
+    all_types = function_types()
+    for type_info in all_types:
+        if type_info[1] == name:
+            return type_info[0]
+    
+    return None
+
 # Получение деталей функции
 def function_details(function_id: int):
     function_data = None
@@ -257,10 +276,7 @@ def function_details(function_id: int):
 
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
+            cursor = _functions_db_cursor(connection)
 
             # Получаем детали функции
             cursor.execute('''
@@ -292,10 +308,7 @@ def prompt(prompt_id: int) -> str:
     
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-            
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
+            cursor = _functions_db_cursor(connection)
             
             # Получаем промпт
             cursor.execute('SELECT text FROM prompts WHERE id = ?', (prompt_id,))
@@ -313,10 +326,7 @@ def prompt(prompt_id: int) -> str:
 def rebuild_embeddings(embeddings_operation):
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
+            cursor = _functions_db_cursor(connection)
             
             # Удаляем все
             cursor.execute('DELETE FROM embeddings')
@@ -373,7 +383,8 @@ def rebuild_embeddings(embeddings_operation):
     except Exception as e:
         raise Exception(f"Не удалось пересчитать эмбеддинги: {e}")
 
-def top_3_similar(query_embedding: list[float], limit: int = 3, batch_size: int = 1000) -> list[tuple[int, float]]:
+# Поиск похожих эмбеддингов
+def top_N_similar(query_embedding: list[float], limit: int = 3, batch_size: int = 1000) -> list[tuple[int, float]]:
     # Нормализуем запрос один раз
     query_emb = np.array(query_embedding, dtype=np.float32)
     query_norm = query_emb / np.linalg.norm(query_emb)
@@ -383,11 +394,8 @@ def top_3_similar(query_embedding: list[float], limit: int = 3, batch_size: int 
     
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
-            
+            cursor = _functions_db_cursor(connection)
+         
             cursor.execute('SELECT function_id, embedding FROM embeddings')
             
             while True:
@@ -439,11 +447,8 @@ def save_function(function_id: int = None, name: str = None, type_id: int = None
                 description: str = None, command: str = None) -> int:
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
-            
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
-            
+            cursor = _functions_db_cursor(connection)
+          
             if function_id:  # Обновление существующей
                 cursor.execute('''
                     UPDATE functions 
@@ -472,11 +477,8 @@ def save_function(function_id: int = None, name: str = None, type_id: int = None
 def save_prompt(prompt_id: int = None, function_id: int = None, text: str = None) -> int:
     try:
         with _functions_db_connection() as connection:
-            cursor = connection.cursor()
+            cursor = _functions_db_cursor(connection)
 
-            # Инициализация базы данных функций
-            _try_init_functions_db(cursor)
-            
             if prompt_id:  # Обновление существующего
                 cursor.execute('UPDATE prompts SET text = ? WHERE id = ?', (text, prompt_id))
                 connection.commit()

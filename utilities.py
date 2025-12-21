@@ -1,5 +1,3 @@
-from typing import Any, Union
-
 import os
 
 import configparser
@@ -20,7 +18,7 @@ def main_folder() -> str:
     return _MAIN_FOLDER_PATH
 
 # Значение из конфигурационного файла
-def config_value(path: Union[str, None], section: str, key: str, fallback: Any = None) -> Union[str, int, float, bool, None]:
+def config_value(path: str | None, section: str, key: str, fallback: any = None) -> str | int | float | bool | None:
     # Чтение конфигурационного файла
     config_path = os.path.join(main_folder(), 'config.ini') if path is None else path
     parser = configparser.ConfigParser()
@@ -51,6 +49,20 @@ def config_value(path: Union[str, None], section: str, key: str, fallback: Any =
     # Возврат значения по умолчанию при отсутствии раздела или ключа
     except (configparser.NoSectionError, configparser.NoOptionError):
         return fallback
+
+# Запись значения в конфигурационный файл
+def set_config_value(path: str | None, section: str, key: str, value: str | int | float | bool):
+    # Чтение конфигурационного файла
+    config_path = os.path.join(main_folder(), 'config.ini') if path is None else path
+    parser = configparser.ConfigParser()
+    parser.read(config_path)
+
+    # Установказначения
+    parser.set(section, key, str(value))
+
+    # Перезапись файла
+    with open(config_path, 'w') as config_file:
+        parser.write(config_file)
 
 # Экземпляр логгера
 _MAIN_LOGGER = None
