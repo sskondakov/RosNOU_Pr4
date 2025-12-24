@@ -8,6 +8,7 @@ amd64/Lib/*
 other
 rubert-tiny2
 clear_cache.bat
+dialogs.json
 events.log
 functions.db
 gigakeys.ini

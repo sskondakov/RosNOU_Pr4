@@ -53,6 +53,24 @@ db_path = functions_db_path()
 open(db_path, 'w').close()
 
 ###############################################################################
+# Подготовка файла конфигурации
+
+# Путь к файлу настройки GigaChat
+config_path = os.path.join(script_path, 'gigakeys.ini')
+
+# Чтение настройки
+config = configparser.ConfigParser()
+config.read(config_path)
+
+# Удаление флага первого запуска
+if config.has_section('MAIN') and config.has_option('MAIN', 'first_run'):
+    config.remove_option('MAIN', 'first_run')
+    
+# Запись настройки в  файл
+with open(config_path, 'w', encoding='utf-8') as config_file:
+        config.write(config_file)
+
+###############################################################################
 # Создание файла настройки GigaChat
 
 # Путь к файлу настройки GigaChat

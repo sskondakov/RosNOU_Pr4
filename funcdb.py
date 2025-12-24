@@ -21,11 +21,11 @@ def functions_db_path() -> str:
 # Соединение с базой данных функций
 def _functions_db_connection():
     # Путь к файлу базы данных
-    functions_db_path = functions_db_path()
-    if not os.path.exists(functions_db_path):
+    db_path = functions_db_path()
+    if not os.path.exists(db_path):
         raise Exception("База данных функций не найдена")
 
-    return sqlite3.connect(functions_db_path)
+    return sqlite3.connect(db_path)
 
 # Курсор базы данных
 def _functions_db_cursor(connection):
